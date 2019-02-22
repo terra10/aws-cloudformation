@@ -1,0 +1,259 @@
+Description: Creates our OpenShift environment
+
+Parameters:
+  EnvironmentName:
+      Description: An environment name that will be prefixed to resource names
+      Type: String
+      Default: t10
+  NetworkStackNameParameter:
+    Description: Reference to the vpc-10 stack
+    Type: String
+    Default: 't10-cf-vpc'
+  HostAMI:
+    Description: Which AMI to use
+    Type: String
+    Default: 'ami-262e9f5b' # CENTOS7
+  Terra10IP:
+      Description: The public IP of Terra10 for inbound network security
+      Type: String
+      Default: 0.0.0.0/0
+  OpenshiftSubnet1CIDR:
+      Description: Please enter the IP range (CIDR notation) for the subnet in the 1st Availability Zone
+      Type: String
+      Default: 10.0.21.0/24
+
+Resources:
+  ######################
+  ## OpenShift Network
+  ######################
+  OpenshiftSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !ImportValue t10-vpc-id
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref OpenshiftSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Join [ "-", [ !Ref EnvironmentName, "subnet-openshift-az1", !Ref OpenshiftSubnet1CIDR]]
+  OpenshiftRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !ImportValue t10-vpc-id
+      Tags:
+        - Key: Name
+          Value: !Join [ "-", [ !Ref EnvironmentName, "openshift-rt"]]
+  OpenshiftRouteTableRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref OpenshiftRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: igw-022774b8c42f13a1b # MOET NOG NETJES MET EXPORT / IMPORT
+  OpenshiftRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OpenshiftSubnet1
+      RouteTableId: !Ref OpenshiftRouteTable
+  ######################
+  ## OpenShift Security
+  ######################
+  OpenshiftNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !ImportValue t10-vpc-id
+      Tags:
+        - Key: Name
+          Value: !Join [ "-", [ !Ref EnvironmentName, "nacl-openshift"]]
+  OpenshiftNetworkAclEntryInbound100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref Terra10IP
+      Egress: 'false'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '22'
+        To: '22'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "100"
+  OpenshiftNetworkAclEntryInbound200:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: '217.105.136.48/32'
+      Egress: 'false'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '22'
+        To: '22'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "200"
+  OpenshiftNetworkAclEntryInbound300:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: '0.0.0.0/0'
+      Egress: 'false'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '32768'
+        To: '65535'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "300"
+  OpenshiftNetworkAclEntryOutbound100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref Terra10IP
+      Egress: 'true'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '22'
+        To: '22'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "100"
+  OpenshiftNetworkAclEntryOutbound200:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: '0.0.0.0/0'
+      Egress: 'true'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '443'
+        To: '443'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "200"
+  OpenshiftNetworkAclEntryOutbound300:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: '0.0.0.0/0'
+      Egress: 'true'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '32768'
+        To: '65535'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "300"
+  # Nodig voor apt-get en updates
+  OpenshiftNetworkAclEntryOutbound400:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: '0.0.0.0/0'
+      Egress: 'true'
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+      PortRange:
+        From: '80'
+        To: '80'
+      Protocol: "6"
+      RuleAction: allow
+      RuleNumber: "400"
+  OpenshiftSubnetNetworkAclAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref OpenshiftSubnet1
+      NetworkAclId: !Ref OpenshiftNetworkAcl
+  OpenshiftInfraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: t10-sg-openshift-infra
+      GroupDescription: t10-sg-openshift-infra
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 6443
+        ToPort: 6443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 10.0.21.0/24
+      VpcId: !ImportValue t10-vpc-id
+      Tags:
+        - Key: Name
+          Value: t10-sg-openshift-infra
+  OpenshiftComputeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: t10-sg-openshift-compute
+      GroupDescription: t10-sg-openshift-compute
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 10.0.21.0/24
+      VpcId: !ImportValue t10-vpc-id
+      Tags:
+        - Key: Name
+          Value: t10-sg-openshift-compute
+  ######################
+  ## OpenShift Servers
+  ######################
+  OpenshiftMaster1EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref HostAMI
+      InstanceType: t3.large
+      KeyName: RJdG_Paris_T10
+      IamInstanceProfile: t10-ec2-role
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdb"
+          Ebs:
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+      PrivateIpAddress: 10.0.21.21
+      SubnetId: !Ref OpenshiftSubnet1
+      SecurityGroupIds:
+        - !Ref OpenshiftInfraSecurityGroup
+      Tags:
+        - Key: Name
+          Value: t10-openshift-master1
+        - Key: billing
+          Value: Terra10
+      UserData:
+        Fn::Base64: !Sub |
+          #!bin/bash -xe
+          yum -y install git
+          mkdir /tmp/scripts
+          cd /tmp/scripts
+          git clone https://github.com/rbrt86/prepareOKDNode.git
+          cd prepareOKDNode
+          ./prepareNode.sh
+  OpenshiftInfra1EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref HostAMI
+      InstanceType: t3.medium
+      KeyName: RJdG_Paris_T10
+      IamInstanceProfile: t10-ec2-role
+      PrivateIpAddress: 10.0.21.31
+      SubnetId: !Ref OpenshiftSubnet1
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdb"
+          Ebs:
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+      SecurityGroupIds:
+        - !Ref OpenshiftInfraSecurityGroup
+      Tags:
+        - Key: Name
+          Value: t10-openshift-infra1
+        - Key: billing
+          Value: Terra10
+      UserData:
+        Fn::Base64: !Sub |
+          #!bin/bash -xe
+          yum -y install git
+          mkdir /tmp/scripts
+          cd /tmp/scripts
+          git clone https://github.com/rbrt86/prepareOKDNode.git
+          cd prepareOKDNode
+          ./prepareNode.sh
