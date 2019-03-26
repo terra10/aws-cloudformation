@@ -205,6 +205,10 @@ Resources:
       KeyName: RJdG_Paris_T10
       IamInstanceProfile: t10-ec2-role
       BlockDeviceMappings:
+        - DeviceName: "/dev/sda"
+          Ebs:
+            DeleteOnTermination: "true"
+            VolumeSize: 40
         - DeviceName: "/dev/sdb"
           Ebs:
             DeleteOnTermination: "true"
@@ -237,6 +241,10 @@ Resources:
       PrivateIpAddress: 10.0.21.31
       SubnetId: !Ref OpenshiftSubnet1
       BlockDeviceMappings:
+        - DeviceName: "/dev/sda"
+          Ebs:
+            DeleteOnTermination: "true"
+            VolumeSize: 40
         - DeviceName: "/dev/sdb"
           Ebs:
             DeleteOnTermination: "true"
