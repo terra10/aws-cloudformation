@@ -1,0 +1,23 @@
+## Basic table with timetolive attribute
+## during insert set epoch value on attribute timetolive to auto-delete records
+DDBTable:
+  Type: "AWS::DynamoDB::Table"
+  DeletionPolicy: Retain
+  Properties:
+    TableName: MyDynamoDBTableWithTimetolive
+    SSESpecification:
+      SSEEnabled: true
+    PointInTimeRecoverySpecification:
+      PointInTimeRecoveryEnabled: true
+    AttributeDefinitions:
+    -
+      AttributeName: "identification"
+      AttributeType: "S"
+    KeySchema:
+    -
+      AttributeName: "identification"
+      KeyType: "HASH"
+    BillingMode: PAY_PER_REQUEST
+    TimeToLiveSpecification:
+        AttributeName: timetolive
+        Enabled: true
