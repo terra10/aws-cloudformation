@@ -1,0 +1,13 @@
+  SesTemplateTerra10:
+    Type: AWS::SES::Template
+    Properties:
+      Template:
+        TemplateName: terra10-ses-template
+        SubjectPart: Hello sir!
+        HtmlPart:
+          Fn::Sub: |
+            <img src="https://terra10.io/logo.png">
+            <center><h4>Hello</h4></center>
+            <p>This is an email</p>
+            <p>containing a variable {{var1}}</p>
+            
